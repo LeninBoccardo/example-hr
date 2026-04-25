@@ -259,7 +259,7 @@ export class RequestsService {
       if (!req) throw new NotFoundException(`request ${requestId} not found`);
       const canCancelAsPrivileged = actorRole === Role.MANAGER || actorRole === Role.ADMIN;
       if (!canCancelAsPrivileged && req.employeeId !== actorEmployeeId) {
-        throw new ForbiddenException('Cannot cancel a request that does not belong to you');
+        throw new NotFoundException(`request ${requestId} not found`);
       }
       assertTransition(req.status, RequestStatus.CANCELLED);
       await this.releaseReservationTx(manager, req);
