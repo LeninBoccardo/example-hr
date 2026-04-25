@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios, { AxiosError, AxiosInstance } from 'axios';
 import { AppConfig } from '../config/config.schema';
@@ -32,13 +32,12 @@ export interface HcmDebitResult {
 
 @Injectable()
 export class HcmClient {
-  private readonly logger = new Logger(HcmClient.name);
   private readonly http: AxiosInstance;
   private readonly breaker: CircuitBreaker;
   private readonly maxRetries: number;
   private readonly retryBaseMs: number;
 
-  constructor(private readonly config: ConfigService<AppConfig>) {
+  constructor(config: ConfigService<AppConfig>) {
     this.http = axios.create({
       baseURL: config.get<string>('HCM_BASE_URL', { infer: true }),
       timeout: config.get<number>('HCM_TIMEOUT_MS', { infer: true }),

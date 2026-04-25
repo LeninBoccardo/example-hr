@@ -70,7 +70,6 @@ export async function createTestApp(opts: CreateTestAppOptions): Promise<TestApp
   process.env.OUTBOX_MAX_ATTEMPTS = '3';
   process.env.OUTBOX_WORKER_ENABLED = opts.outboxWorkerEnabled ? 'true' : 'false';
   process.env.RECONCILE_CRON_ENABLED = 'false';
-  process.env.RECONCILE_CRON_EXPRESSION = '0 */30 * * * *';
   process.env.HCM_BATCH_INGEST_SECRET = opts.batchIngestSecret ?? 'test-batch-secret';
 
   const module = await Test.createTestingModule({
