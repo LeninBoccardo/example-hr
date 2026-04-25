@@ -5,13 +5,13 @@ for ExampleHR while keeping per-employee, per-location balances in sync with
 an external HCM system (Workday, SAP, etc).
 
 For the design rationale, alternatives considered, and contract details, see
-[`docs/TRD.md`](docs/TRD.md).
+[docs/TRD.md](docs/TRD.md).
 
 ---
 
 ## What's in here
 
-```
+```text
 apps/
 ├── timeoff/      Main NestJS service (REST API, persistence, lifecycle, sync)
 └── hcm-mock/     Standalone Express HCM mock with scenario switches (used by tests + local dev)
@@ -49,21 +49,149 @@ npm run start:dev
 ```
 
 A few seeded employees come up out of the box on the mock:
-`E1/NY=10`, `E1/SF=5`, `E2/NY=15`.
+`E1/NY=10`, `E1/SF=5`, `E2/NY=15`. The timeoff service's local snapshot
+table starts empty — pull the seed into local state with the manager-only
+refresh endpoint or the HCM batch-ingest endpoint (both shown below) before
+employee reads will succeed.
 
-To smoke-test:
+## How to use
+
+All endpoints are mounted under `/api/v1`. Every write endpoint accepts an
+`Idempotency-Key` header; replaying the same key + body is a no-op and
+returns the original response. Every endpoint except `/healthz` and
+`/hcm/batch-ingest` (header-secured) requires a `Bearer <jwt>` with a
+`role` claim of `employee`, `manager`, or `admin`.
+
+### 1. Mint a JWT for local exploration
+
+The canonical way to mint tokens in code is `TokenService.sign(...)` (see
+[apps/timeoff/src/common/auth/token.service.ts](apps/timeoff/src/common/auth/token.service.ts)).
+For ad-hoc curl from the shell:
 
 ```bash
-# Health
-curl localhost:3000/api/v1/healthz
-
-# Mint a manager token (one-liner; see test/integration/helpers/app-factory.ts
-# for the canonical TokenService API)
+# Manager token — must match JWT_SECRET in your .env
 node -e "
   const jwt=require('jsonwebtoken');
   console.log(jwt.sign({sub:'mgr-1',employeeId:'E-MGR',role:'manager'}, 'change-me-in-prod-please', {expiresIn:'1h'}))
 "
+
+# Employee token (so the employee owns 'E1' and can act on it)
+node -e "
+  const jwt=require('jsonwebtoken');
+  console.log(jwt.sign({sub:'user-E1',employeeId:'E1',role:'employee'}, 'change-me-in-prod-please', {expiresIn:'1h'}))
+"
+
+export TOKEN=...   # paste either of the above
 ```
+
+### 2. Health check
+
+```bash
+curl localhost:3000/api/v1/healthz
+# → { "status": "ok", "hcm": "reachable" }
+```
+
+### 3. Seed the local snapshot from HCM
+
+The timeoff DB is empty on first boot — pull a balance from the mock
+before reading it as an employee:
+
+```bash
+curl -X POST -H "Authorization: Bearer $MGR_TOKEN" \
+  localhost:3000/api/v1/balances/E1/NY/refresh
+# → { ..., balanceDays: 10, reservedDays: 0, availableDays: 10, source: "HCM_REFRESH" }
+```
+
+### 4. Read a balance
+
+```bash
+curl -H "Authorization: Bearer $TOKEN" \
+  localhost:3000/api/v1/balances/E1/NY
+# → { employeeId, locationId, balanceDays, reservedDays, availableDays, ... }
+```
+
+Employees can only read their own balance; managers and admins can read any.
+
+### 5. Create a request
+
+```bash
+curl -X POST localhost:3000/api/v1/requests \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: $(uuidgen)" \
+  -d '{
+    "locationId": "NY",
+    "startDate":  "2026-05-04",
+    "endDate":    "2026-05-05",
+    "reason":     "long weekend"
+  }'
+# → 201 with the full RequestDto, status = "PENDING",
+#    and the requested days are immediately reserved against the balance.
+```
+
+### 6. Approve / reject / cancel (manager or admin)
+
+```bash
+# Approve — attempts a synchronous HCM commit. On success the request goes
+# straight to COMMITTED with hcmCommitId set; on retryable failure the debit
+# goes to the outbox and the request stays APPROVED until the worker drains.
+curl -X POST -H "Authorization: Bearer $TOKEN" \
+  localhost:3000/api/v1/requests/<id>/approve
+
+# Reject — releases the reservation
+curl -X POST -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"reason":"team coverage"}' \
+  localhost:3000/api/v1/requests/<id>/reject
+
+# Cancel — employee may cancel their own pending request; manager/admin may cancel any
+curl -X POST -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{}' \
+  localhost:3000/api/v1/requests/<id>/cancel
+```
+
+### 7. Force a fresh pull from HCM (anytime)
+
+```bash
+curl -X POST -H "Authorization: Bearer $TOKEN" \
+  localhost:3000/api/v1/balances/E1/NY/refresh
+```
+
+### 8. Admin operations
+
+```bash
+# Trigger reconciliation across the corpus
+curl -X POST -H "Authorization: Bearer $ADMIN_TOKEN" \
+  localhost:3000/api/v1/admin/reconcile
+
+# Inspect the outbox
+curl -H "Authorization: Bearer $ADMIN_TOKEN" \
+  localhost:3000/api/v1/admin/outbox
+
+# Drain the outbox once on demand (also runs in the background when OUTBOX_WORKER_ENABLED=true)
+curl -X POST -H "Authorization: Bearer $ADMIN_TOKEN" \
+  localhost:3000/api/v1/admin/outbox/drain
+```
+
+### 9. Batch ingest from HCM (header-secured, no JWT)
+
+```bash
+curl -X POST localhost:3000/api/v1/hcm/batch-ingest \
+  -H "x-hcm-secret: batch-ingest-shared-secret" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "batchId": "nightly-2026-04-25",
+    "asOf":    "2026-04-25T00:00:00Z",
+    "entries": [
+      { "employeeId": "E1", "locationId": "NY", "balance": 12 },
+      { "employeeId": "E1", "locationId": "SF", "balance": 5  }
+    ]
+  }'
+```
+
+The full contract — including error shapes — lives in
+[docs/TRD.md §7](docs/TRD.md#7-api-contract).
 
 ## Running the tests
 
@@ -83,16 +211,20 @@ You can also run each tier in isolation:
 npm run test:unit          # pure domain + small-unit
 npm run test:integration   # SQLite + NestJS testing module
 npm run test:e2e           # full-stack vs Express HCM mock
+npm run test:all           # all three, sequentially
 ```
 
-The coverage thresholds enforced by `jest.config.ts`:
+Coverage thresholds enforced by [jest.config.ts](jest.config.ts) — the build
+fails if any of these regress:
 
-| Metric | Threshold | Current |
-|--------|-----------|---------|
-| Statements | 88% | See latest `npm run test:cov` report |
-| Branches | 70% | See latest `npm run test:cov` report |
-| Functions | 80% | See latest `npm run test:cov` report |
-| Lines | 88% | See latest `npm run test:cov` report |
+| Metric     | Threshold |
+| ---------- | --------- |
+| Statements | 95%       |
+| Branches   | 90%       |
+| Functions  | 90%       |
+| Lines      | 95%       |
+
+The current report (after `npm run test:cov`) lives at `coverage/index.html`.
 
 ## Architecture in 30 seconds
 
@@ -115,17 +247,11 @@ The coverage thresholds enforced by `jest.config.ts`:
   `HCM_SYNC_ADJUST` ledger entries on drift and flag pending requests that
   no longer fit under the new HCM balance.
 
-## REST endpoints
-
-See [`docs/TRD.md` §7](docs/TRD.md#7-api-contract). All write endpoints accept
-an `Idempotency-Key` header. All endpoints except `/api/v1/healthz` and
-`/api/v1/hcm/batch-ingest` (header-secured) require a `Bearer <jwt>` with
-a `role` claim.
-
 ## Configuration
 
-All config flows through `apps/timeoff/src/config/config.schema.ts` and is
-validated via Joi. See [`.env.example`](.env.example) for the full list.
+All config flows through
+[apps/timeoff/src/config/config.schema.ts](apps/timeoff/src/config/config.schema.ts)
+and is validated via Joi. See [.env.example](.env.example) for the full list.
 
 Notable knobs:
 
@@ -145,12 +271,12 @@ docker compose up --build
 
 This brings up the timeoff service + HCM mock side by side with the same
 network. The compose file is intentionally minimal — see
-[`docker-compose.yml`](docker-compose.yml).
+[docker-compose.yml](docker-compose.yml).
 
 ## Development conventions
 
 - TypeScript strict mode (`strictNullChecks`, `noImplicitAny`).
-- Pure domain in `apps/timeoff/src/domain/`. No framework imports there.
+- Pure domain in [apps/timeoff/src/domain/](apps/timeoff/src/domain/). No framework imports there.
 - Persistence layer hides TypeORM behind small repository classes that
   accept an `EntityManager` for cross-aggregate transactions.
 - Errors split by tier: `DomainError` (4xx user feedback) and `HcmError`
@@ -160,10 +286,10 @@ network. The compose file is intentionally minimal — see
 
 ## Deliverables (per take-home brief)
 
-- ✅ TRD at [`docs/TRD.md`](docs/TRD.md)
-- ✅ Code (this repo)
-- ✅ Test suite — extensive unit/integration/e2e coverage (`npm run test:all`)
-- ✅ Coverage report (generated under `coverage/` after `npm run test:cov`)
+- TRD at [docs/TRD.md](docs/TRD.md)
+- Code (this repo)
+- Test suite — extensive unit/integration/e2e coverage (`npm run test:all`)
+- Coverage report (generated under `coverage/` after `npm run test:cov`)
 
 ## What I'd build next
 

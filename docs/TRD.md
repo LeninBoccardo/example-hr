@@ -1,9 +1,11 @@
 # Time-Off Microservice — Technical Requirements Document
 
-**Version:** 1.0  
-**Status:** Implemented (take-home assessment)  
+**Version:** 1.1  
+**Status:** Implemented and verified (take-home assessment)  
 **Author:** Lenin Boccardo  
-**Date:** 2026-04-24
+**Date:** 2026-04-25  
+**Verification:** 23 test suites / 193 tests pass (`npm run test:cov`); end-to-end
+flow exercised against the bundled HCM mock (see [README.md §How to use](../README.md#how-to-use)).
 
 ---
 
@@ -56,7 +58,7 @@ evidence.
 
 ## 3. System Context
 
-```
+```text
                 ┌──────────────────────┐
                 │   Employee / Manager │
                 └──────────┬───────────┘
@@ -95,7 +97,7 @@ repository serves both local development and the E2E test suite.
 ## 4. Key Challenges
 
 | # | Challenge | How we address it |
-|---|-----------|-------------------|
+| - | --------- | ----------------- |
 | C1 | HCM and ExampleHR can both modify balance independently | Treat HCM as authoritative; reconcile drift via batch ingest + manual job; record every adjustment as a ledger event |
 | C2 | HCM might silently lie (return success but inconsistent state) | Idempotency keys on HCM writes; dedupe local commit on idempotency key; defensive ledger entries even when HCM call appears to succeed |
 | C3 | HCM realtime can be slow / down | Per-call timeout, exponential backoff retry, circuit breaker that fast-fails when upstream is unhealthy |
@@ -123,7 +125,7 @@ repository serves both local development and the E2E test suite.
 
 ### 5.2 Request lifecycle
 
-```
+```text
        create
          │
          ▼
@@ -285,11 +287,11 @@ documented because reviewing them is part of the assessment criteria.
 Base path: `/api/v1`. JWT required unless marked Public.
 
 | Method | Path | Auth | Notes |
-|--------|------|------|-------|
+| ------ | ---- | ---- | ----- |
 | `GET`  | `/balances/:employeeId/:locationId` | employee (self) / manager / admin | Returns balance + reservedDays + availableDays + lastHcmSyncAt |
 | `POST` | `/balances/:employeeId/:locationId/refresh` | manager / admin | Forces a HCM realtime fetch and updates snapshot |
 | `POST` | `/requests` | employee / manager / admin | Body: `{locationId, startDate, endDate, reason?}`. Header: `Idempotency-Key` (recommended) |
-| `GET`  | `/requests/:id` | employee (self) / manager / admin | |
+| `GET`  | `/requests/:id` | employee (self) / manager / admin | — |
 | `GET`  | `/requests?employeeId=&status=` | manager / admin | Filterable list |
 | `POST` | `/requests/:id/approve` | manager / admin | Triggers HCM debit; returns final state (`COMMITTED` / `APPROVED` / `FAILED`) |
 | `POST` | `/requests/:id/reject` | manager / admin | Body: `{reason?}` |
@@ -307,7 +309,7 @@ can branch on outcome without parsing free-text.
 
 ## 8. Data Model
 
-```
+```text
 balance_snapshots(employee_id, location_id, balance_days REAL, reserved_days REAL,
                   version INT, last_hcm_sync_at, updated_at,
                   PRIMARY KEY (employee_id, location_id))
@@ -354,7 +356,7 @@ floating-point drift across long ledger sequences. See `apps/timeoff/src/domain/
 ## 9. Failure Modes & Recovery
 
 | Scenario | Response |
-|----------|----------|
+| -------- | -------- |
 | HCM 5xx during approve | Sync attempt fails with retryable error → outbox enqueue → request stays `APPROVED`. Worker drains when HCM recovers. |
 | HCM timeout | Same as 5xx; circuit breaker may fast-fail subsequent calls until cooldown elapses. |
 | HCM `INSUFFICIENT_BALANCE` (terminal) | Request → `FAILED`, reservation released, ledger records the contradiction (`HCM_SYNC_ADJUST`). |
@@ -442,10 +444,19 @@ The deliverable is graded on test rigor. We layered the tests intentionally:
 
 ### 12.4 Coverage
 
-`jest --coverage` produces an HTML report under `coverage/`. The bar:
-≥ 85% statements, ≥ 80% branches, ≥ 85% functions, enforced by
-`coverageThreshold` in `jest.config.ts`. The submission zip includes the
-HTML output as proof of coverage.
+`jest --coverage` produces an HTML report under `coverage/`. The thresholds
+enforced by `coverageThreshold` in `jest.config.ts` (build fails on
+regression):
+
+| Metric     | Threshold | Measured |
+| ---------- | --------- | -------- |
+| Statements | 95%       | 97.93%   |
+| Branches   | 90%       | 90.95%   |
+| Functions  | 90%       | 94.31%   |
+| Lines      | 95%       | 98.65%   |
+
+193 tests across 23 suites, ~16 s total wall time on a developer laptop. The
+submission zip includes the HTML report under `coverage/` as proof.
 
 ## 13. Future Work
 
@@ -464,7 +475,7 @@ HTML output as proof of coverage.
 
 ---
 
-**Appendices**
+## Appendices
 
 - API code: [apps/timeoff/src/](../apps/timeoff/src/)
 - HCM mock: [apps/hcm-mock/src/](../apps/hcm-mock/src/)
