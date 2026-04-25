@@ -1,0 +1,4 @@
+{
+  "extends": "./tsconfig.json",
+  "exclude": ["node_modules", "test", "dist", "coverage", "apps/hcm-mock", "**/*spec.ts", "**/*.test.ts"]
+}
