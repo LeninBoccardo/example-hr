@@ -138,6 +138,31 @@ describe('Requests lifecycle (integration)', () => {
     expect(bal2.body.availableDays).toBe(10);
   });
 
+  it('manager can cancel another employee request', async () => {
+    await seedBalance('E4M', 'NY', 10);
+    const ownerTok = handle.employeeToken('E4M');
+    const mgrTok = handle.managerToken();
+
+    const created = await request(handle.app.getHttpServer())
+      .post('/api/v1/requests')
+      .set({ Authorization: `Bearer ${ownerTok}` })
+      .send({ locationId: 'NY', startDate: '2026-06-01', endDate: '2026-06-03' });
+    expect(created.status).toBe(201);
+
+    const cancelled = await request(handle.app.getHttpServer())
+      .post(`/api/v1/requests/${created.body.id}/cancel`)
+      .set({ Authorization: `Bearer ${mgrTok}` })
+      .send({});
+    expect(cancelled.status).toBe(201);
+    expect(cancelled.body.status).toBe(RequestStatus.CANCELLED);
+
+    const bal = await request(handle.app.getHttpServer())
+      .get('/api/v1/balances/E4M/NY')
+      .set({ Authorization: `Bearer ${ownerTok}` });
+    expect(bal.body.reservedDays).toBe(0);
+    expect(bal.body.availableDays).toBe(10);
+  });
+
   it('reject restores reservation', async () => {
     await seedBalance('E5', 'NY', 10);
     const empTok = handle.employeeToken('E5');

@@ -32,6 +32,7 @@ import { LedgerEntryType, LedgerSource } from '../domain/ledger';
 import { CreateRequestDto } from './dto/create-request.dto';
 import { RequestDto } from './dto/request.dto';
 import { InsufficientBalanceError } from '../domain/errors';
+import { Role } from '../common/auth/auth.types';
 
 @Injectable()
 export class RequestsService {
@@ -246,12 +247,18 @@ export class RequestsService {
     return this.toDto(updated);
   }
 
-  async cancel(requestId: string, actor: string, actorEmployeeId: string): Promise<RequestDto> {
+  async cancel(
+    requestId: string,
+    actor: string,
+    actorEmployeeId: string,
+    actorRole: Role,
+  ): Promise<RequestDto> {
     const updated = await this.balances.withTx(async (manager) => {
       const req = await this.requests.findByIdTx(manager, requestId);
       if (!req) throw new NotFoundException(`request ${requestId} not found`);
-      if (req.employeeId !== actorEmployeeId) {
-        throw new ConflictException('Cannot cancel a request that does not belong to you');
+      const canCancelAsPrivileged = actorRole === Role.MANAGER || actorRole === Role.ADMIN;
+      if (!canCancelAsPrivileged && req.employeeId !== actorEmployeeId) {
+        throw new NotFoundException(`request ${requestId} not found`);
       }
       assertTransition(req.status, RequestStatus.CANCELLED);
       await this.releaseReservationTx(manager, req);
@@ -491,4 +498,3 @@ export class RequestsService {
     };
   }
 }
-
