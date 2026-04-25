@@ -3,7 +3,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ScheduleModule } from '@nestjs/schedule';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { randomUUID } from 'crypto';
 import { tmpdir } from 'os';
 import { join } from 'path';
@@ -12,6 +12,8 @@ import { configSchema } from '@timeoff/config/config.schema';
 import { AuthModule } from '@timeoff/common/auth/auth.module';
 import { JwtAuthGuard } from '@timeoff/common/auth/jwt-auth.guard';
 import { RolesGuard } from '@timeoff/common/auth/roles.guard';
+import { IdempotencyModule } from '@timeoff/common/idempotency/idempotency.module';
+import { HttpIdempotencyInterceptor } from '@timeoff/common/idempotency/http-idempotency.interceptor';
 import { PersistenceModule } from '@timeoff/persistence/persistence.module';
 import { BalanceModule } from '@timeoff/balance/balance.module';
 import { RequestsModule } from '@timeoff/requests/requests.module';
@@ -92,6 +94,7 @@ export async function createTestApp(opts: CreateTestAppOptions): Promise<TestApp
       }),
       AuthModule,
       PersistenceModule,
+      IdempotencyModule,
       HcmModule,
       BalanceModule,
       RequestsModule,
@@ -104,6 +107,7 @@ export async function createTestApp(opts: CreateTestAppOptions): Promise<TestApp
     providers: [
       { provide: APP_GUARD, useClass: JwtAuthGuard },
       { provide: APP_GUARD, useClass: RolesGuard },
+      { provide: APP_INTERCEPTOR, useClass: HttpIdempotencyInterceptor },
     ],
   }).compile();
 

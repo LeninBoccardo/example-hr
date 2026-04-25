@@ -2,11 +2,13 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ScheduleModule } from '@nestjs/schedule';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { configSchema, AppConfig } from './config/config.schema';
 import { JwtAuthGuard } from './common/auth/jwt-auth.guard';
 import { RolesGuard } from './common/auth/roles.guard';
 import { AuthModule } from './common/auth/auth.module';
+import { IdempotencyModule } from './common/idempotency/idempotency.module';
+import { HttpIdempotencyInterceptor } from './common/idempotency/http-idempotency.interceptor';
 import { PersistenceModule } from './persistence/persistence.module';
 import { BalanceModule } from './balance/balance.module';
 import { RequestsModule } from './requests/requests.module';
@@ -38,6 +40,7 @@ import { entities } from './persistence/entities';
     }),
     AuthModule,
     PersistenceModule,
+    IdempotencyModule,
     BalanceModule,
     RequestsModule,
     HcmModule,
@@ -50,6 +53,7 @@ import { entities } from './persistence/entities';
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
+    { provide: APP_INTERCEPTOR, useClass: HttpIdempotencyInterceptor },
   ],
 })
 export class AppModule {}

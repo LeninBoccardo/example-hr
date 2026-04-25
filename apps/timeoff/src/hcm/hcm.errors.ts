@@ -44,4 +44,8 @@ export class HcmError extends Error {
   static unknown(msg: string): HcmError {
     return new HcmError(HcmErrorCode.UNKNOWN, msg, { retryable: true });
   }
+
+  static unauthorized(msg: string, status?: number): HcmError {
+    return new HcmError(HcmErrorCode.UNAUTHORIZED, msg, { retryable: false, upstreamStatus: status });
+  }
 }

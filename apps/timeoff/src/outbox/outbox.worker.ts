@@ -23,7 +23,7 @@ export class OutboxWorker implements OnModuleInit, OnModuleDestroy {
   private readonly enabled: boolean;
 
   constructor(
-    private readonly config: ConfigService<AppConfig>,
+    config: ConfigService<AppConfig>,
     private readonly outbox: OutboxService,
     private readonly hcm: HcmClient,
     private readonly balances: BalanceRepository,
@@ -93,6 +93,16 @@ export class OutboxWorker implements OnModuleInit, OnModuleDestroy {
       }
       await this.outbox.markDone(row);
     } catch (err) {
+      // Terminal HCM errors (insufficient balance, invalid dimension) cannot
+      // succeed on retry — fail the request immediately and stop the outbox
+      // from looping until DEAD.
+      if (err instanceof HcmError && !err.retryable) {
+        await this.handleTerminalHcmFailure(row, err);
+        this.logger.warn(
+          `outbox ${row.id} terminal HCM failure (${err.code}): request marked FAILED`,
+        );
+        return;
+      }
       const error = err as Error;
       const nextAttempt = new Date(Date.now() + this.backoffMs(row.attempts + 1));
       await this.outbox.markFailed(row, error, nextAttempt, this.maxAttempts);

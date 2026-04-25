@@ -1,11 +1,4 @@
-import {
-  BadRequestException,
-  Body,
-  Controller,
-  Headers,
-  Post,
-  UnauthorizedException,
-} from '@nestjs/common';
+import { Body, Controller, Headers, Post, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ReconciliationService } from './reconciliation.service';
 import { BatchIngestDto, BatchIngestResultDto } from './dto/batch-ingest.dto';
@@ -28,9 +21,6 @@ export class ReconciliationController {
     const expected = this.config.get<string>('HCM_BATCH_INGEST_SECRET', { infer: true });
     if (!secret || secret !== expected) {
       throw new UnauthorizedException('invalid or missing batch-ingest secret');
-    }
-    if (!Array.isArray(dto.entries)) {
-      throw new BadRequestException('entries must be an array');
     }
     return this.service.ingestBatch(dto, 'hcm:batch');
   }

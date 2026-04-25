@@ -245,4 +245,64 @@ describe('Requests lifecycle (integration)', () => {
       .set({ Authorization: `Bearer ${empTok}` });
     expect(bal.body.reservedDays).toBe(0);
   });
+
+  it('returns 404 when creating a request for an unseeded (employee, location)', async () => {
+    const tok = handle.employeeToken('E-NEW');
+    const res = await request(handle.app.getHttpServer())
+      .post('/api/v1/requests')
+      .set({ Authorization: `Bearer ${tok}` })
+      .send({ locationId: 'NEVERLAND', startDate: '2026-06-01', endDate: '2026-06-02' });
+    expect(res.status).toBe(404);
+    expect(res.body.message).toContain('No balance found');
+  });
+
+  it('rejects approving a request that is no longer PENDING', async () => {
+    await seedBalance('E9', 'NY', 10);
+    const empTok = handle.employeeToken('E9');
+    const mgrTok = handle.managerToken();
+
+    const r = await request(handle.app.getHttpServer())
+      .post('/api/v1/requests')
+      .set({ Authorization: `Bearer ${empTok}` })
+      .send({ locationId: 'NY', startDate: '2026-06-01', endDate: '2026-06-01' });
+
+    // First approve succeeds (HCM ok by default)
+    const a1 = await request(handle.app.getHttpServer())
+      .post(`/api/v1/requests/${r.body.id}/approve`)
+      .set({ Authorization: `Bearer ${mgrTok}` })
+      .send({});
+    expect(a1.body.status).toBe(RequestStatus.COMMITTED);
+
+    // Second approve must fail with 409 (no longer PENDING)
+    const a2 = await request(handle.app.getHttpServer())
+      .post(`/api/v1/requests/${r.body.id}/approve`)
+      .set({ Authorization: `Bearer ${mgrTok}` })
+      .send({});
+    expect(a2.status).toBe(409);
+  });
+
+  it('returns 404 for approving a non-existent request id', async () => {
+    const mgrTok = handle.managerToken();
+    const res = await request(handle.app.getHttpServer())
+      .post(`/api/v1/requests/00000000-0000-0000-0000-000000000000/approve`)
+      .set({ Authorization: `Bearer ${mgrTok}` })
+      .send({});
+    expect(res.status).toBe(404);
+  });
+
+  it('returns 404 for cancel/reject on non-existent request id', async () => {
+    const empTok = handle.employeeToken('E-X');
+    const mgrTok = handle.managerToken();
+    const id = '00000000-0000-0000-0000-000000000000';
+    const cancel = await request(handle.app.getHttpServer())
+      .post(`/api/v1/requests/${id}/cancel`)
+      .set({ Authorization: `Bearer ${empTok}` })
+      .send({});
+    expect(cancel.status).toBe(404);
+    const reject = await request(handle.app.getHttpServer())
+      .post(`/api/v1/requests/${id}/reject`)
+      .set({ Authorization: `Bearer ${mgrTok}` })
+      .send({});
+    expect(reject.status).toBe(404);
+  });
 });

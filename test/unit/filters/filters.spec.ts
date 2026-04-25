@@ -90,10 +90,18 @@ describe('HcmExceptionFilter', () => {
     expect(status).toHaveBeenCalledWith(HttpStatus.BAD_GATEWAY);
   });
 
-  it('falls back to 502 for unmapped codes', () => {
+  it('maps UNAUTHORIZED to 401', () => {
     const { host, status } = makeHost();
     const e = new HcmError(HcmErrorCode.UNAUTHORIZED, 'x');
     filter.catch(e, host);
     expect(status).toHaveBeenCalledWith(HttpStatus.UNAUTHORIZED);
+  });
+
+  it('falls back to 502 BAD_GATEWAY for an unmapped error code', () => {
+    const { host, status } = makeHost();
+    // Forge an HcmError with a code that's not in HTTP_STATUS_BY_CODE
+    const e = new HcmError('NEVER_HEARD_OF_IT' as unknown as HcmErrorCode, 'x');
+    filter.catch(e, host);
+    expect(status).toHaveBeenCalledWith(HttpStatus.BAD_GATEWAY);
   });
 });

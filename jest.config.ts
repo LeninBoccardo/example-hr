@@ -25,10 +25,10 @@ const config: Config = {
   },
   coverageThreshold: {
     global: {
-      statements: 88,
-      branches: 70,
-      functions: 80,
-      lines: 88,
+      statements: 95,
+      branches: 90,
+      functions: 90,
+      lines: 95,
     },
   },
   setupFiles: ['<rootDir>/test/jest.setup.ts'],

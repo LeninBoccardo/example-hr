@@ -102,6 +102,13 @@ describe('balance domain', () => {
         commitReservation({ balanceDays: 10, reservedDays: 1 }, 2),
       ).toThrow(InvalidAmountError);
     });
+
+    it('throws InsufficientBalance when balance is somehow under-funded vs reservation', () => {
+      // pathological state: reserved > balance (could happen after HCM corrective sync)
+      expect(() =>
+        commitReservation({ balanceDays: 1, reservedDays: 5 }, 5),
+      ).toThrow(InsufficientBalanceError);
+    });
   });
 
   describe('applyDelta', () => {

@@ -46,11 +46,6 @@ export function isDebitType(type: LedgerEntryType): boolean {
   return type === LedgerEntryType.DEBIT;
 }
 
-export function describeDelta(ev: LedgerEvent): string {
-  const sign = ev.delta >= 0 ? '+' : '';
-  return `${sign}${ev.delta}d (${ev.type} via ${ev.source})`;
-}
-
 /**
  * Given a prior state and a new event, compute the next state. Throws on
  * negative projected balance since that's a ledger integrity violation.

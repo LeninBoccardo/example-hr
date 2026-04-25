@@ -97,6 +97,101 @@ describe('HcmClient error translation', () => {
       await new Promise<void>((r) => server.close(() => r()));
     }
   });
+
+  it('translates 401 to non-retryable UNAUTHORIZED', async () => {
+    const http = require('http');
+    const server = http.createServer((_req: unknown, res: { writeHead: (s: number, h: object) => void; end: (b: string) => void }) => {
+      res.writeHead(401, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ message: 'bad token' }));
+    });
+    await new Promise<void>((r) => server.listen(0, '127.0.0.1', () => r()));
+    const port = (server.address() as { port: number }).port;
+    const client = buildClient(`http://127.0.0.1:${port}`);
+    try {
+      await expect(client.getBalance('E', 'L')).rejects.toMatchObject({
+        code: HcmErrorCode.UNAUTHORIZED,
+        retryable: false,
+      });
+    } finally {
+      await new Promise<void>((r) => server.close(() => r()));
+    }
+  });
+
+  it('translates 403 to non-retryable UNAUTHORIZED', async () => {
+    const http = require('http');
+    const server = http.createServer((_req: unknown, res: { writeHead: (s: number, h: object) => void; end: (b: string) => void }) => {
+      res.writeHead(403, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ message: 'forbidden' }));
+    });
+    await new Promise<void>((r) => server.listen(0, '127.0.0.1', () => r()));
+    const port = (server.address() as { port: number }).port;
+    const client = buildClient(`http://127.0.0.1:${port}`);
+    try {
+      await expect(client.debit('E', 'L', 1, 'idem-403')).rejects.toMatchObject({
+        code: HcmErrorCode.UNAUTHORIZED,
+        retryable: false,
+      });
+    } finally {
+      await new Promise<void>((r) => server.close(() => r()));
+    }
+  });
+
+  it('translates abrupt connection reset to retryable upstream error', async () => {
+    const http = require('http');
+    const server = http.createServer((req: { socket: { destroy: () => void } }, _res: unknown) => {
+      // Hard-close the socket to simulate ECONNRESET
+      req.socket.destroy();
+    });
+    await new Promise<void>((r) => server.listen(0, '127.0.0.1', () => r()));
+    const port = (server.address() as { port: number }).port;
+    const client = buildClient(`http://127.0.0.1:${port}`);
+    try {
+      await expect(client.getBalance('E', 'L')).rejects.toMatchObject({
+        code: HcmErrorCode.UPSTREAM_ERROR,
+        retryable: true,
+      });
+    } finally {
+      await new Promise<void>((r) => server.close(() => r()));
+    }
+  });
+
+  it('translates timeout (slow server) to retryable HcmError.timeout', async () => {
+    const http = require('http');
+    const server = http.createServer((_req: unknown, _res: unknown) => {
+      // Never respond — let the client timeout
+    });
+    await new Promise<void>((r) => server.listen(0, '127.0.0.1', () => r()));
+    const port = (server.address() as { port: number }).port;
+    const client = buildClient(`http://127.0.0.1:${port}`, 50);
+    try {
+      await expect(client.getBalance('E', 'L')).rejects.toMatchObject({
+        code: HcmErrorCode.TIMEOUT,
+        retryable: true,
+      });
+    } finally {
+      await new Promise<void>((r) => server.close(() => r()));
+    }
+  });
+
+  it('translates non-axios thrown values via the unknown fallback', async () => {
+    const http = require('http');
+    const server = http.createServer((_req: unknown, res: { writeHead: (s: number, h: object) => void; end: (b: string) => void }) => {
+      // Return body that handleResponse will not treat as a structured HCM error,
+      // routing through the generic 4xx path of HcmError.upstream.
+      res.writeHead(418, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ message: "I'm a teapot" }));
+    });
+    await new Promise<void>((r) => server.listen(0, '127.0.0.1', () => r()));
+    const port = (server.address() as { port: number }).port;
+    const client = buildClient(`http://127.0.0.1:${port}`);
+    try {
+      await expect(client.getBalance('E', 'L')).rejects.toMatchObject({
+        code: HcmErrorCode.UPSTREAM_ERROR,
+      });
+    } finally {
+      await new Promise<void>((r) => server.close(() => r()));
+    }
+  });
 });
 
 // Suppress unused axios reference warning while keeping a hint that direct

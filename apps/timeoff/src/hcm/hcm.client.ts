@@ -135,12 +135,7 @@ export class HcmClient {
       throw HcmError.invalidDimension(msg);
     }
     if (res.status === 401 || res.status === 403) {
-      throw new HcmError(
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        'UNAUTHORIZED' as any,
-        msg,
-        { retryable: false, upstreamStatus: res.status },
-      );
+      throw HcmError.unauthorized(msg, res.status);
     }
     if (res.status >= 500) {
       throw HcmError.upstream(msg, res.status);

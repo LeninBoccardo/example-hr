@@ -108,9 +108,27 @@ describe('countDaysInclusive', () => {
     ).toThrow(InvalidDateRangeError);
   });
 
-  it('throws on invalid dates', () => {
+  it('throws on invalid dates (start)', () => {
     expect(() => countDaysInclusive(new Date('not-a-date'), new Date('2026-04-20'))).toThrow(
       InvalidDateRangeError,
     );
+  });
+
+  it('throws on invalid dates (end)', () => {
+    expect(() => countDaysInclusive(new Date('2026-04-20'), new Date('not-a-date'))).toThrow(
+      InvalidDateRangeError,
+    );
+  });
+
+  it('throws when start arg is not a Date instance', () => {
+    expect(() =>
+      countDaysInclusive('2026-04-20' as unknown as Date, new Date('2026-04-21')),
+    ).toThrow(InvalidDateRangeError);
+  });
+
+  it('throws when end arg is not a Date instance', () => {
+    expect(() =>
+      countDaysInclusive(new Date('2026-04-20'), '2026-04-21' as unknown as Date),
+    ).toThrow(InvalidDateRangeError);
   });
 });

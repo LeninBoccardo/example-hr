@@ -69,6 +69,34 @@ describe('E2E: auth and access control', () => {
     expect(outboxList.status).toBe(403);
   });
 
+  it('employee cannot fetch another employee\'s request by id', async () => {
+    await f.seedBalance('E26', 'NY', 5);
+    const ownerTok = f.app.employeeToken('E26');
+    const otherTok = f.app.employeeToken('E27');
+    const created = await request(f.app.app.getHttpServer())
+      .post('/api/v1/requests')
+      .set('Authorization', `Bearer ${ownerTok}`)
+      .send({ locationId: 'NY', startDate: isoDate(0), endDate: isoDate(0) });
+    const fetch = await request(f.app.app.getHttpServer())
+      .get(`/api/v1/requests/${created.body.id}`)
+      .set('Authorization', `Bearer ${otherTok}`);
+    expect(fetch.status).toBe(403);
+  });
+
+  it('employee can fetch their own request by id', async () => {
+    await f.seedBalance('E28', 'NY', 5);
+    const tok = f.app.employeeToken('E28');
+    const created = await request(f.app.app.getHttpServer())
+      .post('/api/v1/requests')
+      .set('Authorization', `Bearer ${tok}`)
+      .send({ locationId: 'NY', startDate: isoDate(0), endDate: isoDate(0) });
+    const fetch = await request(f.app.app.getHttpServer())
+      .get(`/api/v1/requests/${created.body.id}`)
+      .set('Authorization', `Bearer ${tok}`);
+    expect(fetch.status).toBe(200);
+    expect(fetch.body.id).toBe(created.body.id);
+  });
+
   it('manager can list all requests; employee cannot', async () => {
     await f.seedBalance('E25', 'NY', 5);
     const mgrTok = f.app.managerToken();

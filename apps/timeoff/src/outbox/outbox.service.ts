@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { EntityManager } from 'typeorm';
 import { OutboxRepository, OutboxRow } from '../persistence/outbox.repository';
-import { OutboxStatus } from '../persistence/entities/outbox-event.entity';
+import { OutboxEventEntity, OutboxStatus } from '../persistence/entities/outbox-event.entity';
 import { OutboxEventType } from './outbox.types';
 
 @Injectable()
@@ -19,12 +19,16 @@ export class OutboxService {
     },
   ): Promise<OutboxRow> {
     const now = new Date().toISOString();
-    const existing = await manager
-      .getRepository('outbox_events')
-      .findOne({ where: { idempotencyKey: args.idempotencyKey } })
-      .catch(() => null);
+    let existing: OutboxRow | null = null;
+    try {
+      existing = (await manager
+        .getRepository(OutboxEventEntity)
+        .findOne({ where: { idempotencyKey: args.idempotencyKey } })) as OutboxRow | null;
+    } catch {
+      existing = null;
+    }
     if (existing) {
-      return existing as unknown as OutboxRow;
+      return existing;
     }
     return this.repo.insertTx(manager, {
       aggregateType: args.aggregateType,

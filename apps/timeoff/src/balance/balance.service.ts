@@ -1,10 +1,9 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { EntityManager } from 'typeorm';
 import { BalanceRepository, BalanceRow } from '../persistence/balance.repository';
 import { LedgerRepository } from '../persistence/ledger.repository';
 import { HcmClient } from '../hcm/hcm.client';
 import { AuditService } from '../audit/audit.service';
-import { applyDelta, available, setAbsolute } from '../domain/balance';
+import { available, setAbsolute } from '../domain/balance';
 import { LedgerEntryType, LedgerSource } from '../domain/ledger';
 import { BalanceDto } from './dto/balance.dto';
 
@@ -83,67 +82,6 @@ export class BalanceService {
       return updated;
     });
     return this.toDto(row, 'HCM_REFRESH');
-  }
-
-  /**
-   * Apply a balance delta within an existing transaction. Returns updated row.
-   * Caller is responsible for recording the ledger entry.
-   */
-  async applyDeltaTx(
-    manager: EntityManager,
-    employeeId: string,
-    locationId: string,
-    delta: number,
-  ): Promise<BalanceRow> {
-    const current = (await this.balances.findOneTx(manager, employeeId, locationId)) ?? {
-      employeeId,
-      locationId,
-      balanceDays: 0,
-      reservedDays: 0,
-      version: 0,
-      lastHcmSyncAt: null,
-      updatedAt: new Date().toISOString(),
-    };
-    const next = applyDelta(current, delta);
-    const updated: BalanceRow = {
-      ...current,
-      balanceDays: next.balanceDays,
-      reservedDays: next.reservedDays,
-      updatedAt: new Date().toISOString(),
-    };
-    await this.balances.upsertTx(manager, updated);
-    return updated;
-  }
-
-  async setAbsoluteTx(
-    manager: EntityManager,
-    employeeId: string,
-    locationId: string,
-    absoluteDays: number,
-    asOf: string,
-  ): Promise<{ row: BalanceRow; delta: number; prior: BalanceRow | null }> {
-    const current = await this.balances.findOneTx(manager, employeeId, locationId);
-    const state = current ?? {
-      employeeId,
-      locationId,
-      balanceDays: 0,
-      reservedDays: 0,
-      version: 0,
-      lastHcmSyncAt: null,
-      updatedAt: new Date().toISOString(),
-    };
-    const { next, delta } = setAbsolute(state, absoluteDays);
-    const updated: BalanceRow = {
-      employeeId,
-      locationId,
-      balanceDays: next.balanceDays,
-      reservedDays: next.reservedDays,
-      version: state.version,
-      lastHcmSyncAt: asOf,
-      updatedAt: new Date().toISOString(),
-    };
-    await this.balances.upsertTx(manager, updated);
-    return { row: updated, delta, prior: current ?? null };
   }
 
   private toDto(row: BalanceRow, source: 'LOCAL' | 'HCM_REFRESH'): BalanceDto {

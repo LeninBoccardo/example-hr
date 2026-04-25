@@ -49,6 +49,13 @@ describe('ledger domain', () => {
       }
       expect(projectBalance(events)).toBe(10);
     });
+
+    it('returns negative when ledger sums below zero (caller detects bad state)', () => {
+      const events: LedgerEvent[] = [
+        ev({ delta: -3, type: LedgerEntryType.DEBIT, source: LedgerSource.REQUEST }),
+      ];
+      expect(projectBalance(events)).toBe(-3);
+    });
   });
 
   describe('applyEvent', () => {

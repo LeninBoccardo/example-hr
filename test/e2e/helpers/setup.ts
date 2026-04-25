@@ -2,6 +2,8 @@ import { createTestApp, TestAppHandle } from '../../integration/helpers/app-fact
 import { startMockHcm, HcmMockFixture } from '../../integration/helpers/mock-hcm-fixture';
 import { HcmClient } from '@timeoff/hcm/hcm.client';
 import { BalanceService } from '@timeoff/balance/balance.service';
+import { DataSource } from 'typeorm';
+import { entities } from '@timeoff/persistence/entities';
 
 export interface E2EFixture {
   app: TestAppHandle;
@@ -25,6 +27,11 @@ export async function bootE2E(opts: { outboxWorkerEnabled?: boolean } = {}): Pro
       hcm.mock.store.clear();
       hcm.mock.resetScenario();
       app.app.get(HcmClient).getCircuit().reset();
+      const ds = app.app.get(DataSource);
+      // Order matters only loosely (no FKs), but clear children-ish first.
+      for (const e of entities) {
+        await ds.getRepository(e).clear();
+      }
     },
     async seedBalance(employeeId, locationId, balance) {
       hcm.mock.store.setBalance(employeeId, locationId, balance);
