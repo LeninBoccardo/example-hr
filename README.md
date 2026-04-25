@@ -89,10 +89,10 @@ The coverage thresholds enforced by `jest.config.ts`:
 
 | Metric | Threshold | Current |
 |--------|-----------|---------|
-| Statements | 88% | 90.0% |
-| Branches | 70% | 71.8% |
-| Functions | 80% | 83.6% |
-| Lines | 88% | 90.6% |
+| Statements | 88% | See latest `npm run test:cov` report |
+| Branches | 70% | See latest `npm run test:cov` report |
+| Functions | 80% | See latest `npm run test:cov` report |
+| Lines | 88% | See latest `npm run test:cov` report |
 
 ## Architecture in 30 seconds
 
@@ -162,7 +162,7 @@ network. The compose file is intentionally minimal — see
 
 - ✅ TRD at [`docs/TRD.md`](docs/TRD.md)
 - ✅ Code (this repo)
-- ✅ Test suite — 117 tests across unit/integration/e2e
+- ✅ Test suite — extensive unit/integration/e2e coverage (`npm run test:all`)
 - ✅ Coverage report (generated under `coverage/` after `npm run test:cov`)
 
 ## What I'd build next

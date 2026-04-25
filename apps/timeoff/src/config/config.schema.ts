@@ -17,7 +17,6 @@ export const configSchema = Joi.object({
   OUTBOX_MAX_ATTEMPTS: Joi.number().default(5),
   OUTBOX_WORKER_ENABLED: Joi.boolean().default(true),
   RECONCILE_CRON_ENABLED: Joi.boolean().default(false),
-  RECONCILE_CRON_EXPRESSION: Joi.string().default('0 */15 * * * *'),
   HCM_BATCH_INGEST_SECRET: Joi.string().min(8).default('batch-ingest-shared-secret'),
 });
 
@@ -38,6 +37,5 @@ export interface AppConfig {
   OUTBOX_MAX_ATTEMPTS: number;
   OUTBOX_WORKER_ENABLED: boolean;
   RECONCILE_CRON_ENABLED: boolean;
-  RECONCILE_CRON_EXPRESSION: string;
   HCM_BATCH_INGEST_SECRET: string;
 }

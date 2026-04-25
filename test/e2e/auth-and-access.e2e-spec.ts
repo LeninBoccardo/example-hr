@@ -53,7 +53,7 @@ describe('E2E: auth and access control', () => {
       .post(`/api/v1/requests/${created.body.id}/cancel`)
       .set('Authorization', `Bearer ${otherTok}`)
       .send({});
-    expect([403, 409]).toContain(cancel.status);
+    expect(cancel.status).toBe(403);
   });
 
   it('admin endpoints reject non-admin tokens', async () => {

@@ -21,7 +21,7 @@ export class ReconciliationService {
   private readonly cronEnabled: boolean;
 
   constructor(
-    private readonly config: ConfigService<AppConfig>,
+    config: ConfigService<AppConfig>,
     private readonly balances: BalanceRepository,
     private readonly hcm: HcmClient,
     private readonly requestsService: RequestsService,
