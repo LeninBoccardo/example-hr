@@ -78,6 +78,6 @@ export class RequestsController {
     @Body() _dto: CancelRequestDto,
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<RequestDto> {
-    return this.service.cancel(id, user.userId, user.employeeId);
+    return this.service.cancel(id, user.userId, user.employeeId, user.role);
   }
 }
